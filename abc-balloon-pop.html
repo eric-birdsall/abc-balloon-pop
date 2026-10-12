@@ -1,0 +1,692 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ABC Balloon Pop</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cabin+Sketch:wght@700&family=Patrick+Hand&display=swap">
+<style>
+  /* Layout: one full-screen sheet of drawing paper. Sky scribble on top, balloons float in the
+     middle, the basket sits on a strip of grass at the bottom. Single look on purpose: it is a
+     crayon drawing, so the paper stays white in either host theme. */
+  :root {
+    --paper: #f8f7f2;
+    --ink: #2e2a33;          /* soft graphite, used for letters and outlines */
+    --ink-soft: #8a8490;
+    --sky: #6fb7ee;
+    --grass: #58b04a;
+    --sun: #f7c61c;
+    --basket: #c98a45;
+    --basket-dark: #8a5522;
+    --tag: #fffdf6;
+    --go: #4caf50;
+    --font-display: "Cabin Sketch", "Chalkboard SE", "Comic Sans MS", cursive;
+    --font-hand: "Patrick Hand", "Chalkboard SE", "Comic Sans MS", cursive;
+  }
+  html, body { height: 100%; margin: 0; }
+  [hidden] { display: none !important; }
+  body {
+    background: var(--paper); color: var(--ink); font-family: var(--font-hand);
+    overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  #stage { position: relative; height: 100%; overflow: hidden; touch-action: none; }
+  #bg, #strings { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #defs { position: absolute; width: 0; height: 0; }
+
+  /* ----- basket ----- */
+  #basket { position: absolute; left: 0; top: 0; cursor: pointer; will-change: transform; }
+  #pic svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  #pic span { position: relative; display: block; }
+  #basket svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  #pic { position: absolute; left: 0; top: 0; text-align: center; line-height: 1; cursor: pointer; will-change: transform; }
+  #word { position: absolute; left: 0; right: 0; display: flex; justify-content: center; }
+  .slot {
+    display: flex; align-items: center; justify-content: center; position: relative;
+    color: var(--ink-soft); line-height: 1; transition: color .2s, transform .2s;
+  }
+  .slot.done { color: var(--c); transform: scale(1.08); }
+  .slot.next { color: var(--ink); animation: nudge 1s ease-in-out infinite; }
+  .slot.next::after {
+    content: ""; position: absolute; left: 14%; right: 14%; bottom: 2%; height: 5px;
+    border-radius: 3px; background: var(--ink); opacity: .75; transform: rotate(-2deg);
+  }
+  .slot.read { transform: scale(1.45) rotate(-4deg); }
+  @keyframes nudge { 50% { transform: translateY(-9%); } }
+
+  /* ----- balloons ----- */
+  .balloon { position: absolute; left: 0; top: 0; cursor: grab; will-change: transform; touch-action: none; transform-origin: 50% 42%; }
+  .balloon svg { display: block; width: 100%; height: 100%; overflow: visible; transform-origin: 50% 42%; }
+  .balloon text { font-family: var(--font-hand); font-size: 62px; fill: var(--ink); stroke: #fff; stroke-opacity: .55;
+    stroke-width: 7px; paint-order: stroke; stroke-linejoin: round; }
+  .balloon.drag { cursor: grabbing; z-index: 5; }
+  .balloon.drag svg { transform: scale(1.12); }
+  .balloon.no svg { animation: no .5s ease-in-out; }
+  .balloon.hint svg { animation: hint .9s ease-in-out infinite; }
+  .balloon.read svg { animation: hop .4s ease-out; }
+  .balloon.pop { pointer-events: none; }
+  .balloon.pop svg { animation: pop .22s ease-out forwards; }
+  .balloon.held { pointer-events: none; }
+  @keyframes no { 20% { transform: rotate(-11deg); } 50% { transform: rotate(9deg); } 80% { transform: rotate(-5deg); } }
+  @keyframes hint { 50% { transform: scale(1.14) rotate(4deg); } }
+  @keyframes hop { 40% { transform: translateY(-14%) scale(1.1); } }
+  @keyframes pop { to { transform: scale(1.7); opacity: 0; } }
+  .burst { position: absolute; left: 0; top: 0; pointer-events: none; animation: burst .45s ease-out forwards; }
+  @keyframes burst { from { opacity: 1; scale: .4; } to { opacity: 0; scale: 1.25; } }
+
+  /* ----- top bar ----- */
+  #stars { position: absolute; left: 16px; top: 12px; display: flex; align-items: center; gap: 6px;
+    font-family: var(--font-display); font-size: 30px; pointer-events: none; }
+  #stars svg { width: 40px; height: 40px; overflow: visible; }
+  #gear { position: absolute; right: 16px; top: 12px; width: 44px; height: 44px; border: 0; padding: 8px;
+    background: none; color: var(--ink-soft); cursor: pointer; border-radius: 50%; }
+  #gear svg { width: 100%; height: 100%; }
+  button:focus-visible { outline: 3px dashed var(--ink); outline-offset: 3px; }
+
+  /* ----- start + settings sheets ----- */
+  .sheet { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 22px; padding-inline: 16px; background: rgba(248, 247, 242, .86); z-index: 20; text-align: center; }
+  h1 { margin: 0; font-family: var(--font-display); font-size: clamp(44px, 12vw, 92px); line-height: .95; text-wrap: balance; }
+  h1 span { display: inline-block; }
+  #play { width: clamp(120px, 34vw, 190px); aspect-ratio: 1; border: 0; padding: 0; background: none; cursor: pointer; }
+  #play svg { width: 100%; height: 100%; overflow: visible; animation: nudge 1.4s ease-in-out infinite; }
+  #panel { background: var(--tag); border: 4px solid var(--ink); border-radius: 22px 30px 20px 34px / 30px 20px 34px 22px;
+    padding: 20px 22px 24px; display: flex; flex-direction: column; gap: 16px; max-width: 430px; width: 100%; font-size: 21px; }
+  #panel h2 { margin: 0; font-family: var(--font-display); font-size: 32px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
+  .row > b { flex-basis: 100%; font-weight: 400; color: var(--ink-soft); }
+  .opt { font: inherit; color: var(--ink); min-width: 48px; min-height: 48px; padding: 4px 14px; cursor: pointer;
+    background: var(--paper); border: 3px solid var(--ink); border-radius: 14px 18px 12px 20px / 18px 12px 20px 14px; }
+  .opt[aria-pressed="true"] { background: var(--sun); }
+  #done { background: var(--go); color: #fff; font-size: 24px; align-self: center; padding-inline: 34px; }
+  @media (prefers-reduced-motion: reduce) {
+    .slot.next, .balloon.hint svg, #play svg { animation: none; }
+  }
+</style>
+
+<svg id="defs" aria-hidden="true">
+  <defs>
+    <!-- wobbly edge + waxy specks where the paper shows through -->
+    <filter id="crayon" x="-8%" y="-8%" width="116%" height="116%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="4" result="w"/>
+      <feDisplacementMap in="SourceGraphic" in2="w" scale="4" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="9" result="g"/>
+      <feColorMatrix in="g" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.4 1.95" result="gm"/>
+      <feComposite in="d" in2="gm" operator="in"/>
+    </filter>
+  </defs>
+</svg>
+
+<div id="stage">
+  <svg id="bg" aria-hidden="true"></svg>
+  <svg id="strings" aria-hidden="true"></svg>
+  <div id="pic" aria-hidden="true">
+    <svg viewBox="0 0 100 130"><g filter="url(#crayon)" stroke-linejoin="round">
+      <rect x="43" y="90" width="14" height="40" fill="var(--basket)" stroke="var(--basket-dark)" stroke-width="3"/>
+      <rect x="5" y="5" width="90" height="90" rx="12" fill="var(--tag)" stroke="#e4483b" stroke-width="6"/>
+    </g></svg>
+    <span id="picEmoji"></span>
+  </div>
+  <div id="basket" role="button" aria-label="Hear the word again">
+    <svg id="basketArt" aria-hidden="true"></svg>
+    <div id="word"></div>
+  </div>
+  <div id="balloons"></div>
+
+  <div id="stars" aria-label="Words spelled">
+    <svg viewBox="0 0 40 40"><path filter="url(#crayon)" d="M20 3l5 11 12 1.5-9 8.5 2.500 12L20 30 9.500 36 12 24 3 15.500 15 14z" fill="#f7c61c" stroke="#d99a06" stroke-width="2.500" stroke-linejoin="round"/></svg>
+    <span id="starN">0</span>
+  </div>
+  <button id="gear" aria-label="Grown-ups: settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.200"/><path d="M12 2.500v3M12 18.500v3M2.500 12h3M18.500 12h3M5.300 5.300l2.100 2.100M16.600 16.600l2.100 2.100M5.300 18.700l2.100-2.100M16.600 7.400l2.100-2.100"/></svg>
+  </button>
+
+  <div id="start" class="sheet">
+    <h1><span style="color:#e4483b">A</span><span style="color:#3b8fe0">B</span><span style="color:#4caf50">C</span> Balloon Pop</h1>
+    <button id="play" aria-label="Play">
+      <svg viewBox="0 0 100 100"><g filter="url(#crayon)"><circle cx="50" cy="50" r="45" fill="#4caf50" stroke="#2f7d33" stroke-width="5"/><path d="M40 28 L74 50 L40 72 Z" fill="#fffdf6" stroke="#fffdf6" stroke-width="6" stroke-linejoin="round"/></g></svg>
+    </button>
+  </div>
+
+  <div id="settings" class="sheet" hidden>
+    <div id="panel">
+      <h2>For grown-ups</h2>
+      <div class="row" id="optVoice"><b>Voice</b>
+        <button class="opt" data-v="f">Heart (female)</button>
+        <button class="opt" data-v="m">Puck (male)</button>
+      </div>
+      <div class="row" id="optLen"><b>Word length (grows by itself after 3 words)</b></div>
+      <div class="row" id="optSound"><b>Sound</b>
+        <button class="opt" data-s="1">On</button>
+        <button class="opt" data-s="0">Off</button>
+      </div>
+      <button class="opt" id="done">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const stage = $('stage'), bg = $('bg'), stringsEl = $('strings'), basketEl = $('basket'), balloonsEl = $('balloons');
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const NS = 'http://www.w3.org/2000/svg';
+
+  /* ---------- words (must match tools/make_voice.py) ---------- */
+  const WORDS = {
+    cat: '🐱', dog: '🐶', sun: '☀️', pig: '🐷', bus: '🚌', hat: '🎩', bee: '🐝', cow: '🐮', fox: '🦊', egg: '🥚', bed: '🛏️', car: '🚗',
+    frog: '🐸', duck: '🦆', fish: '🐟', star: '⭐', moon: '🌙', cake: '🎂', bear: '🐻', tree: '🌳', boat: '⛵', ball: '⚽', lion: '🦁', milk: '🥛',
+    apple: '🍎', house: '🏠', horse: '🐴', train: '🚂', pizza: '🍕', mouse: '🐭', tiger: '🐯', snail: '🐌', robot: '🤖', whale: '🐳',
+    banana: '🍌', rabbit: '🐰', flower: '🌸', monkey: '🐵', rocket: '🚀', turtle: '🐢', spider: '🕷️', carrot: '🥕', cookie: '🍪', guitar: '🎸',
+    rainbow: '🌈', dolphin: '🐬', giraffe: '🦒', penguin: '🐧', octopus: '🐙', balloon: '🎈', chicken: '🐔', cupcake: '🧁',
+    elephant: '🐘', dinosaur: '🦕', umbrella: '☂️', airplane: '✈️', mushroom: '🍄', kangaroo: '🦘', sandwich: '🥪', hedgehog: '🦔',
+  };
+  const MIN_LEN = 3, MAX_LEN = 8, WORDS_PER_LEVEL = 3;
+  const PRAISE = ['Great spelling!', 'You did it!', 'Super job!', 'Awesome!', 'Up, up and away!', 'Wow, look at it go!'];
+  // crayon-box colours: [fill, outline]
+  const COLORS = [['#ee5a4c', '#b72a1e'], ['#f6953a', '#c2620c'], ['#f8d038', '#cf9d05'], ['#63c065', '#2f8a33'],
+    ['#5aa7ee', '#2268b4'], ['#b07be0', '#7440aa'], ['#f487bd', '#c64689'], ['#45c9bb', '#14897d']];
+
+  /* ---------- saved state ---------- */
+  const KEY = 'abc-balloon-pop';
+  const S = { voice: 'f', sound: true, len: MIN_LEN, streak: 0, stars: 0, seen: false };
+  try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+  S.len = clamp(S.len | 0, MIN_LEN, MAX_LEN);
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+  /* ---------- sound ---------- */
+  let ac = null;
+  function audio() {
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (ac.state === 'suspended') ac.resume().catch(() => {});
+    return ac;
+  }
+  function tone(freq, dur, { type = 'sine', vol = .16, slide = 0, delay = 0 } = {}) {
+    if (!S.sound) return;
+    const a = audio(); if (!a) return;
+    const t = a.currentTime + delay;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t + dur);
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + .015);
+    g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g).connect(a.destination);
+    o.start(t); o.stop(t + dur + .05);
+  }
+  const sfx = {
+    pick: () => tone(620, .08, { type: 'triangle', slide: 240, vol: .09 }),
+    tie: () => { tone(520, .1, { type: 'triangle', vol: .12 }); tone(780, .16, { type: 'triangle', vol: .12, delay: .09 }); },
+    back: () => tone(420, .16, { slide: -140, vol: .06 }),
+    pop: () => { tone(900, .07, { type: 'square', slide: -700, vol: .07 }); tone(180, .09, { type: 'triangle', slide: -90, vol: .12 }); },
+    lift: () => { tone(260, .9, { type: 'sine', slide: 700, vol: .08 }); [523, 659, 784, 1047].forEach((f, i) => tone(f, .24, { type: 'triangle', vol: .11, delay: .15 + i * .1 })); },
+  };
+
+  /* ---------- speech ---------- */
+  const canSpeak = 'speechSynthesis' in window;
+  let devVoice = null;
+  function pickVoice() {
+    if (!canSpeak) return;
+    const en = speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang));
+    const good = v => /Natural|Neural|Premium|Enhanced|Samantha|Google US/i.test(v.name);
+    devVoice = en.find(v => good(v) && /US/i.test(v.lang)) || en.find(good) || en[0] || null;
+  }
+  if (canSpeak) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+
+  // Recorded voice: voice-<tag>.mp3 holds every phrase back to back; voice-<tag>.json maps a
+  // phrase key to [start, duration] in seconds. Lines are {text, keys}; the text is the
+  // device-voice fallback when the clips aren't available (e.g. opened via file://).
+  let clips = null, clipBuf = null, sources = [], timers = [];
+  const voiceSets = {};
+  function loadVoice(tag = S.voice) {
+    if (!voiceSets[tag]) {
+      voiceSets[tag] = (async () => {
+        try {
+          const [map, bytes] = await Promise.all([
+            fetch(`voice-${tag}.json`).then(r => (r.ok ? r.json() : Promise.reject())),
+            fetch(`voice-${tag}.mp3`).then(r => (r.ok ? r.arrayBuffer() : Promise.reject())),
+          ]);
+          const a = audio(); if (!a) return null;
+          const buf = await new Promise((res, rej) => a.decodeAudioData(bytes, res, rej));
+          return { map, buf };
+        } catch (e) { return null; }
+      })();
+    }
+    return voiceSets[tag].then(v => {
+      if (tag === S.voice) { clips = v && v.map; clipBuf = v && v.buf; }
+      return v;
+    });
+  }
+  const line = (text, ...keys) => ({ text, keys });
+  const L = {
+    letter: c => line(c.toUpperCase() + '.', 'l_' + c),
+    find: c => line(`Find the letter ${c.toUpperCase()}.`, 'find_' + c),
+    ask: w => line(`Let's spell ${w}.`, 'ask_' + w),
+    spells: w => line(`${w.toUpperCase().split('').join(', ')} spells ${w}!`, ...w.split('').map(c => 'l_' + c), 'spells_' + w),
+    praise: () => { const i = Math.floor(Math.random() * PRAISE.length); return line(PRAISE[i], 'praise' + i); },
+    hello: line("Let's spell with balloons!", 'hello'),
+    how: line('Drag the balloons to the basket.', 'how'),
+    levelup: line('Wow! Now the words get longer!', 'levelup'),
+  };
+  function playClips(keys, onKey) {
+    const a = audio();
+    const t0 = a.currentTime;
+    let t = t0 + .05;
+    keys.forEach((k, i) => {
+      const [start, dur] = clips[k];
+      const src = a.createBufferSource();
+      src.buffer = clipBuf;
+      src.connect(a.destination);
+      src.start(t, Math.max(0, start - .04), dur + .1);
+      sources.push(src);
+      if (onKey) timers.push(setTimeout(onKey, (t - t0) * 1000, i));
+      t += dur + .14;
+    });
+    return sleep((t - t0) * 1000);
+  }
+  // Speaks a line; resolves when it finishes. onKey(i) fires as each clip of the line starts.
+  function say(what, onKey) {
+    const { text, keys } = what;
+    hush();
+    const est = 500 + text.length * 55;
+    if (!S.sound) return sleep(Math.min(est, 2200));
+    if (keys && clipBuf && keys.every(k => clips[k])) return playClips(keys, onKey);
+    return new Promise(res => {
+      if (!canSpeak) return setTimeout(res, Math.min(est, 2200));
+      let fin = false;
+      const done = () => { if (!fin) { fin = true; res(); } };
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        if (devVoice) u.voice = devVoice;
+        u.lang = devVoice ? devVoice.lang : 'en-US';
+        u.rate = .9; u.pitch = 1.1;
+        u.onend = done; u.onerror = done;
+        speechSynthesis.speak(u);
+        setTimeout(done, est * 2 + 1500);
+      } catch (e) { done(); }
+    });
+  }
+  function hush() {
+    sources.forEach(s => { try { s.stop(); } catch (e) {} });
+    sources = [];
+    timers.forEach(clearTimeout); timers = [];
+    try { canSpeak && speechSynthesis.cancel(); } catch (e) {}
+  }
+
+  /* ---------- crayon drawing helpers ---------- */
+  // A back-and-forth scribble that colours in the box x..x+w, y..y+h.
+  function scribble(x, y, w, h, step, jit = step * .5) {
+    let d = `M${x} ${y + h * .5}`, up = true;
+    for (let px = x; px <= x + w; px += step) {
+      d += ` L${(px + rnd(-jit, jit)).toFixed(1)} ${(up ? y + rnd(0, h * .2) : y + h - rnd(0, h * .2)).toFixed(1)}`;
+      up = !up;
+    }
+    return d;
+  }
+  function drawScene() {
+    const sky = Math.max(46, H * .1), gh = G.grass;
+    let rays = '';
+    const sx = W - 78, sy = sky + 62, sr = clamp(W * .07, 26, 44);
+    for (let i = 0; i < 10; i++) {
+      const a = i / 10 * Math.PI * 2 + .2;
+      rays += `M${(sx + Math.cos(a) * sr * 1.3).toFixed(1)} ${(sy + Math.sin(a) * sr * 1.3).toFixed(1)} L${(sx + Math.cos(a) * sr * 1.9).toFixed(1)} ${(sy + Math.sin(a) * sr * 1.9).toFixed(1)}`;
+    }
+    const cloud = (x, y, k) => `<path transform="translate(${x} ${y}) scale(${k})" d="M0 30 C-22 30 -22 4 2 8 C6 -14 40 -14 44 6 C62 -6 86 10 70 30 Z" fill="#fff" stroke="#9fc4e6" stroke-width="${4 / k}" stroke-linejoin="round"/>`;
+    bg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    bg.innerHTML = `<g filter="url(#crayon)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="${scribble(-10, -8, W + 20, sky, 13)}" stroke="var(--sky)" stroke-width="11" opacity=".75"/>
+      <path d="${scribble(-10, 4, W + 20, sky * .8, 19)}" stroke="var(--sky)" stroke-width="7" opacity=".5"/>
+      <circle cx="${sx}" cy="${sy}" r="${sr}" fill="var(--sun)" stroke="#e0a106" stroke-width="4"/>
+      <path d="${rays}" stroke="var(--sun)" stroke-width="7"/>
+      ${cloud(W * .12, sky + 70, clamp(W / 700, .8, 1.5))}${W > 620 ? cloud(W * .52, sky + 26, 1.1) : ''}
+      <path d="${scribble(-10, H - gh - 14, W + 20, gh + 30, 9)}" stroke="var(--grass)" stroke-width="9"/>
+      <path d="${scribble(-10, H - gh - 20, W + 20, gh * .7, 15)}" stroke="#3d9233" stroke-width="5" opacity=".8"/>
+    </g>`;
+  }
+  function balloonSVG(letter, [fill, edge]) {
+    return `<svg viewBox="0 0 100 124"><g filter="url(#crayon)">
+      <path d="M50 4 C22 4 8 26 8 50 C8 76 30 98 50 102 C70 98 92 76 92 50 C92 26 78 4 50 4Z" fill="${fill}" stroke="${edge}" stroke-width="4.5"/>
+      <path d="M50 101 L43 113 L57 113 Z" fill="${fill}" stroke="${edge}" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M22 44 C24 28 34 18 46 15 M28 50 C30 38 36 30 42 27" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".7"/>
+    </g><text x="50" y="72" text-anchor="middle">${letter}</text></svg>`;
+  }
+
+  /* ---------- game state ---------- */
+  let W = 0, H = 0;
+  const G = {
+    word: '', idx: 0, phase: 'idle',     // idle | play | fly
+    balloons: [], misses: 0, used: {}, lastAct: 0,
+    // layout
+    s: 60, bw: 0, bh: 0, rim: 0, B: 80, Ba: 70, grass: 30, freeBottom: 0, lift: 12, pic: 60, cx: 0,
+    bx: 0, by: 0, bxT: 0, byHome: 0, vy: 0,
+  };
+
+  function pickWord() {
+    const pool = Object.keys(WORDS).filter(w => w.length === S.len);
+    const used = G.used[S.len] || (G.used[S.len] = []);
+    let left = pool.filter(w => !used.includes(w));
+    if (!left.length) { used.length = 0; left = pool.filter(w => w !== G.word); }
+    const w = left[Math.floor(Math.random() * left.length)];
+    used.push(w);
+    return w;
+  }
+
+  /* ---------- layout ---------- */
+  function measure() {
+    W = stage.clientWidth; H = stage.clientHeight;
+    const n = G.word.length || 3;
+    G.grass = clamp(H * .05, 22, 44);
+    // the word's picture stands on the grass just left of the basket
+    G.pic = clamp(Math.min(H * .1, W * .13), 40, 84);
+    G.s = clamp(Math.min((W - 32 - 56 - G.pic - 8) / n, H * .095), 26, 66);
+    G.rim = 12;
+    G.bw = n * G.s + 56;
+    G.cx = W / 2 + (G.pic + 8) / 2;
+    G.bh = G.rim + G.s + 56;
+    G.byHome = H - G.grass * .55 - G.bh;
+    G.Ba = clamp(G.s * 1.14, 30, 86);
+    G.lift = clamp(H * .02, 9, 18);   // how far each tied balloon raises the basket
+    G.freeBottom = G.byHome - G.Ba * 1.6 - G.lift * (n - 1);
+    // basket art
+    const { bw, bh, rim, s } = G;
+    const lw = n * s + 12, lx = (bw - lw) / 2, ly = rim + 20, lh = s + 8;
+    let weave = '';
+    for (let y = rim + 10; y < bh - 6; y += 13) weave += scribble(10, y, bw - 20, 9, 14, 3) + ' ';
+    $('basketArt').setAttribute('viewBox', `0 0 ${bw} ${bh}`);
+    $('basketArt').innerHTML = `<g filter="url(#crayon)" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M5 ${rim} L${bw - 5} ${rim} L${bw - 15} ${bh - 9} Q${bw - 17} ${bh - 3} ${bw - 24} ${bh - 3} L24 ${bh - 3} Q17 ${bh - 3} 15 ${bh - 9} Z" fill="var(--basket)" stroke="var(--basket-dark)" stroke-width="4"/>
+      <path d="${weave}" fill="none" stroke="var(--basket-dark)" stroke-width="3" opacity=".55"/>
+      <path d="M2 ${rim} L${bw - 2} ${rim}" stroke="var(--basket-dark)" stroke-width="9"/>
+      <rect x="${lx}" y="${ly}" width="${lw}" height="${lh}" rx="9" fill="var(--tag)" stroke="var(--ink)" stroke-width="3"/>
+    </g>`;
+    basketEl.style.width = bw + 'px'; basketEl.style.height = bh + 'px';
+    $('pic').style.width = G.pic + 'px'; $('pic').style.height = G.pic * 1.3 + 'px';
+    $('picEmoji').style.fontSize = G.pic * .68 + 'px'; $('picEmoji').style.lineHeight = G.pic + 'px';
+    const word = $('word');
+    word.style.top = ly + 'px'; word.style.height = lh + 'px';
+    for (const el of word.children) { el.style.width = s + 'px'; el.style.fontSize = s * .98 + 'px'; }
+  }
+  // Spread the loose balloons over a jittered grid in the sky above the basket.
+  function placeFree(instant) {
+    const free = G.balloons.filter(b => b.state === 'free' || b.state === 'drag');
+    const top = 62, aw = W - 24, ah = Math.max(60, G.freeBottom - top);
+    let B = 112, cols, rows;
+    for (; B >= 38; B -= 2) {
+      cols = Math.floor(aw / (B * 1.1)); rows = Math.floor(ah / (B * 1.32));
+      if (cols * rows >= free.length) break;
+    }
+    cols = Math.max(1, cols); rows = Math.max(1, Math.min(rows, Math.ceil(free.length / cols)));
+    cols = Math.min(cols, Math.ceil(free.length / rows));
+    G.B = B;
+    const cw = aw / cols, ch = ah / rows;
+    const cells = shuffle([...Array(cols * rows).keys()]).slice(0, free.length);
+    free.forEach((b, i) => {
+      const c = cells[i] % cols, r = Math.floor(cells[i] / cols);
+      b.hx = 12 + cw * (c + .5) + rnd(-1, 1) * Math.max(0, (cw - B) * .35);
+      b.hy = top + ch * r + B * .56 + rnd(0, 1) * Math.max(0, ch - B * 1.3);
+      if (instant) { b.x = b.hx; b.y = b.hy; }
+    });
+    for (const b of G.balloons) {
+      b.el.style.width = B + 'px'; b.el.style.height = B * 1.24 + 'px';
+    }
+  }
+  const slotX = i => G.bx - G.word.length * G.s / 2 + (i + .5) * G.s;
+
+  /* ---------- round setup ---------- */
+  function makeBalloon(letter, color) {
+    const el = document.createElement('div');
+    el.className = 'balloon';
+    el.innerHTML = balloonSVG(letter, color);
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'var(--ink)');
+    path.setAttribute('stroke-width', '2'); path.setAttribute('stroke-linecap', 'round'); path.setAttribute('opacity', '.7');
+    stringsEl.appendChild(path);
+    const b = { el, path, letter, color, state: 'free', x: 0, y: 0, hx: 0, hy: 0, sc: 1, slot: -1, ph: rnd(0, 6.28), sp: rnd(.7, 1.2) };
+    el.addEventListener('pointerdown', e => grab(b, e));
+    balloonsEl.appendChild(el);
+    return b;
+  }
+  function clearBalloons() {
+    for (const b of G.balloons) { b.el.remove(); b.path.remove(); }
+    G.balloons = [];
+  }
+  function setupWord(w) {
+    clearBalloons();
+    G.word = w; G.idx = 0; G.misses = 0;
+    $('picEmoji').textContent = WORDS[w];
+    const word = $('word');
+    word.innerHTML = '';
+    for (const c of w) { const s = document.createElement('span'); s.className = 'slot'; s.textContent = c; word.appendChild(s); }
+    measure();
+    // letters of the word plus a few that are not in it
+    const others = shuffle('abcdefghijklmnopqrstuvwxyz'.split('').filter(c => !w.includes(c)));
+    const letters = shuffle([...w, ...others.slice(0, w.length <= 4 ? 3 : 2)]);
+    const cols = shuffle(COLORS.slice());
+    G.balloons = letters.map((c, i) => makeBalloon(c, cols[i % cols.length]));
+    placeFree(false);
+    // balloons drift up from below the page; the basket rolls in from the side
+    for (const b of G.balloons) { b.x = b.hx + rnd(-30, 30); b.y = H + G.B + rnd(0, H * .4); }
+    G.bxT = G.cx; G.bx = -G.bw; G.by = G.byHome; G.vy = 0;
+    markNext();
+  }
+  function markNext() {
+    [...$('word').children].forEach((el, i) => el.classList.toggle('next', G.phase !== 'fly' && i === G.idx));
+    setHint(false);
+  }
+  function setHint(on) {
+    const want = G.word[G.idx];
+    for (const b of G.balloons) b.el.classList.toggle('hint', on && b.state === 'free' && b.letter === want);
+  }
+  async function startRound(intro) {
+    G.phase = 'idle';
+    setupWord(pickWord());
+    await sleep(900);
+    G.phase = 'play'; G.lastAct = performance.now();
+    if (intro) await say(intro);
+    if (G.phase !== 'play' || G.idx) return;
+    await say(L.ask(G.word));
+    if (!S.seen && G.phase === 'play' && !G.idx) { S.seen = true; save(); say(L.how); }
+  }
+
+  /* ---------- dragging and tapping ---------- */
+  function grab(b, e) {
+    if (G.phase !== 'play' || b.state !== 'free') return;
+    e.preventDefault();
+    audio();
+    b.state = 'drag'; b.el.classList.add('drag');
+    try { b.el.setPointerCapture(e.pointerId); } catch (err) {}
+    const r = stage.getBoundingClientRect();
+    const ox = b.x - (e.clientX - r.left), oy = b.y - (e.clientY - r.top);
+    const sx = e.clientX, sy = e.clientY;
+    let moved = false;
+    G.lastAct = performance.now();
+    sfx.pick();
+    say(L.letter(b.letter));
+    const move = ev => {
+      if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 10) moved = true;
+      b.x = clamp(ev.clientX - r.left + ox, G.B * .4, W - G.B * .4);
+      b.y = clamp(ev.clientY - r.top + oy, G.B * .5, H - G.B * .3);
+    };
+    const up = () => {
+      b.el.removeEventListener('pointermove', move);
+      b.el.removeEventListener('pointerup', up); b.el.removeEventListener('pointercancel', up);
+      b.el.classList.remove('drag');
+      if (b.state !== 'drag') return;
+      b.state = 'free';
+      G.lastAct = performance.now();
+      // a tap only names the letter; the balloon has to be dragged down to the basket to tie it on
+      if (!moved) return;
+      if (b.y > G.freeBottom - G.B * .2) tryAttach(b);
+      else { b.hx = b.x; b.hy = clamp(b.y, 62 + G.B * .5, G.freeBottom - G.B * .3); }
+    };
+    b.el.addEventListener('pointermove', move);
+    b.el.addEventListener('pointerup', up); b.el.addEventListener('pointercancel', up);
+  }
+  function tryAttach(b) {
+    if (G.phase !== 'play') return;
+    const want = G.word[G.idx];
+    if (b.letter === want) {
+      b.state = 'held'; b.slot = G.idx; b.el.classList.add('held'); b.el.classList.remove('hint');
+      const slot = $('word').children[G.idx];
+      slot.classList.add('done'); slot.style.setProperty('--c', b.color[1]);
+      G.idx++; G.misses = 0;
+      sfx.tie();
+      markNext();
+      if (G.idx === G.word.length) liftOff();
+    } else {
+      // gentle redirect: the balloon floats back up
+      b.el.classList.remove('no'); void b.el.offsetWidth; b.el.classList.add('no');
+      if (b.hy > G.freeBottom - G.B * .3) b.hy = G.freeBottom - G.B * rnd(.5, 1.2);
+      sfx.back();
+      say(L.find(want));
+      if (++G.misses >= 2) setHint(true);
+    }
+  }
+  function pop(b) {
+    b.state = 'gone'; b.el.classList.add('pop'); b.path.remove();
+    sfx.pop();
+    const k = G.B * 1.5, d = document.createElement('div');
+    d.className = 'burst';
+    let rays = '';
+    for (let i = 0; i < 9; i++) { const a = i / 9 * 6.283 + rnd(-.2, .2); rays += `M${50 + Math.cos(a) * 22} ${50 + Math.sin(a) * 22} L${50 + Math.cos(a) * rnd(38, 47)} ${50 + Math.sin(a) * rnd(38, 47)}`; }
+    d.innerHTML = `<svg viewBox="0 0 100 100" width="${k}" height="${k}"><path d="${rays}" stroke="${b.color[1]}" stroke-width="5" stroke-linecap="round" fill="none"/></svg>`;
+    d.style.translate = `${b.x - k / 2}px ${b.y - k / 2}px`;
+    balloonsEl.appendChild(d);
+    setTimeout(() => { d.remove(); b.el.remove(); }, 500);
+  }
+  async function liftOff() {
+    G.phase = 'fly';
+    markNext();
+    const w = G.word, slots = [...$('word').children];
+    const held = G.balloons.filter(b => b.state === 'held').sort((a, b) => a.slot - b.slot);
+    await sleep(800);
+    // read the word back, bouncing each letter and its balloon as it is named
+    await say(L.spells(w), i => {
+      slots.forEach((el, j) => el.classList.toggle('read', i >= w.length || j === i));
+      if (held[i]) { held[i].el.classList.remove('read'); void held[i].el.offsetWidth; held[i].el.classList.add('read'); }
+    });
+    slots.forEach(el => el.classList.remove('read'));
+    for (const b of G.balloons.filter(b => b.state === 'free')) { pop(b); await sleep(170); }
+    sfx.lift();
+    G.vy = -40;
+    S.stars++; S.streak++;
+    $('starN').textContent = S.stars;
+    let intro = null;
+    if (S.streak >= WORDS_PER_LEVEL && S.len < MAX_LEN) { S.len++; S.streak = 0; intro = L.levelup; syncSettings(); }
+    save();
+    await Promise.all([say(L.praise()), new Promise(res => { G.onGone = res; })]);
+    startRound(intro);
+  }
+
+  /* ---------- frame loop ---------- */
+  let last = 0;
+  function frame(now) {
+    const dt = Math.min(.05, (now - last) / 1000 || .016); last = now;
+    const t = now / 1000, k = 1 - Math.exp(-dt * 7);
+    if (G.vy) {
+      G.vy -= 520 * dt; G.by += G.vy * dt;
+      if (G.by + G.bh < -G.Ba * 2.2 - 40 && G.onGone) { const f = G.onGone; G.onGone = null; G.vy = 0; f(); }
+    } else {
+      G.bx += (G.bxT - G.bx) * k;
+      const up = G.idx * G.lift;
+      G.by += (G.byHome - up - (up ? Math.sin(t * 1.7) * 2.5 : 0) - G.by) * k * .5;
+    }
+    const sway = G.vy ? Math.sin(t * 3) * 6 : 0;
+    basketEl.style.transform = `translate(${G.bx - G.bw / 2 + sway}px, ${G.by}px) rotate(${sway * .25}deg)`;
+    $('pic').style.transform = `translate(${G.bx - G.bw / 2 - 8 - G.pic}px, ${H - G.grass * .7 - G.pic * 1.3}px)`;
+    const rimY = G.by + G.rim;
+    for (const b of G.balloons) {
+      if (b.state === 'gone') continue;
+      const bob = Math.sin(t * b.sp + b.ph);
+      let tsc = 1;
+      if (b.state === 'free') {
+        b.x += (b.hx + Math.cos(t * b.sp * .6 + b.ph) * 5 - b.x) * k * .6;
+        b.y += (b.hy + bob * 7 - b.y) * k * .6;
+      } else if (b.state === 'held') {
+        tsc = G.Ba / G.B;
+        const ax = slotX(b.slot) + sway + bob;
+        const ay = G.by - G.Ba * .95 + bob * 2;
+        const kk = G.vy ? 1 - Math.exp(-dt * 16) : k;
+        b.x += (ax - b.x) * kk; b.y += (ay - b.y) * kk;
+      }
+      b.sc += (tsc - b.sc) * k;
+      const B = G.B;
+      b.el.style.transform = `translate(${b.x - B / 2}px, ${b.y - B * .52}px) scale(${b.sc})`;
+      // string: tied to the basket rim, or a short loose tail
+      const kx = b.x, ky = b.y + B * .6 * b.sc - B * .08 * (1 - b.sc);
+      if (b.state === 'held') {
+        const ex = slotX(b.slot) + sway;
+        b.path.setAttribute('d', `M${kx.toFixed(1)} ${ky.toFixed(1)} Q${((kx + ex) / 2 + bob * 4).toFixed(1)} ${((ky + rimY) / 2 + 8).toFixed(1)} ${ex.toFixed(1)} ${rimY.toFixed(1)}`);
+      } else {
+        const len = B * .45;
+        b.path.setAttribute('d', `M${kx.toFixed(1)} ${ky.toFixed(1)} q${(bob * 7).toFixed(1)} ${(len * .5).toFixed(1)} ${(-bob * 3).toFixed(1)} ${len.toFixed(1)}`);
+      }
+    }
+    if (G.phase === 'play' && now - G.lastAct > 9000) { setHint(true); G.lastAct = now; }
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- controls ---------- */
+  const again = () => {
+    if (G.phase !== 'play') return;
+    G.lastAct = performance.now();
+    say(line(`Let's spell ${G.word}. Find the letter ${G.word[G.idx].toUpperCase()}.`, 'ask_' + G.word, 'find_' + G.word[G.idx]));
+  };
+  basketEl.addEventListener('click', again);
+  $('pic').addEventListener('click', again);
+  function syncSettings() {
+    for (const el of $('optVoice').querySelectorAll('.opt')) el.setAttribute('aria-pressed', el.dataset.v === S.voice);
+    for (const el of $('optLen').querySelectorAll('.opt')) el.setAttribute('aria-pressed', +el.dataset.n === S.len);
+    for (const el of $('optSound').querySelectorAll('.opt')) el.setAttribute('aria-pressed', (el.dataset.s === '1') === S.sound);
+  }
+  for (let n = MIN_LEN; n <= MAX_LEN; n++) {
+    const el = document.createElement('button');
+    el.className = 'opt'; el.dataset.n = n; el.textContent = n;
+    $('optLen').appendChild(el);
+  }
+  let lenChanged = false;
+  $('settings').addEventListener('click', async e => {
+    const el = e.target.closest('.opt'); if (!el) return;
+    if (el.dataset.v) { S.voice = el.dataset.v; syncSettings(); await loadVoice(); say(L.hello); }
+    else if (el.dataset.n) { lenChanged = lenChanged || +el.dataset.n !== S.len; S.len = +el.dataset.n; S.streak = 0; }
+    else if (el.dataset.s) { S.sound = el.dataset.s === '1'; if (!S.sound) hush(); }
+    else if (el.id === 'done') {
+      $('settings').hidden = true;
+      if (lenChanged && G.phase !== 'fly' && started) { hush(); startRound(); }
+      lenChanged = false;
+    }
+    save(); syncSettings();
+  });
+  $('gear').addEventListener('click', () => { syncSettings(); $('settings').hidden = false; });
+
+  let started = false;
+  $('play').addEventListener('click', async () => {
+    if (started) return;
+    started = true;
+    audio();
+    $('start').hidden = true;
+    await Promise.race([loadVoice(), sleep(2500)]);
+    startRound(L.hello);
+  });
+
+  let resizeT = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => {
+      measure(); drawScene(); placeFree(false);
+      G.bxT = G.cx;
+    }, 120);
+  });
+
+  /* ---------- boot: show a ready scene behind the start sheet ---------- */
+  $('starN').textContent = S.stars;
+  loadVoice();
+  setupWord(pickWord());
+  G.bx = G.cx;
+  for (const b of G.balloons) { b.x = b.hx; b.y = b.hy; }
+  drawScene();
+  syncSettings();
+  requestAnimationFrame(frame);
+})();
+</script>
